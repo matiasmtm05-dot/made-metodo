@@ -35,7 +35,7 @@ const yo = () => S.sesion();
 const esStaff = () => ['admin', 'lectura'].includes(yo()?.rol);
 const soloLectura = () => yo()?.rol === 'lectura';
 const tagNivel = nv => `<span class="tag ${nv.id}">${esc(nv.nombre)}</span>`;
-const mesCorto = (n, m) => E.mesFecha(n, m).toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+const mesCorto = (n, m) => (E.mesesVisibles(n) > 4 ? 'M' : 'Mes ') + m;
 
 // ---------------- Estructura ----------------
 function layout(body, current = '') {
@@ -64,7 +64,7 @@ function layout(body, current = '') {
 
 function footer() {
   return `<footer class="foot"><div class="wrap">
-    <span class="badge-demo"><span class="tag aviso">Prototipo</span> Solo datos ficticios · se guardan en este navegador.</span>
+    <span class="badge-demo"><span class="tag aviso">Prototipo</span> Negocios y datos ficticios · fecha simulada: ${fecha(E.FECHA_DEMO)} · se guardan en este navegador.</span>
     <span><button data-act="reset">${ui.confirmar === 'reset' ? '¿Seguro? Pulsa otra vez para restablecer' : 'Restablecer datos de ejemplo'}</button></span>
   </div></footer>`;
 }
@@ -376,6 +376,7 @@ function resultadosTab(n) {
 }
 
 // ---------------- Plan de acción ----------------
+const posTxt = g => (g.posiciones.length > 1 ? 'Prioridades ' + g.posiciones.slice(0, -1).join(', ') + ' y ' + g.posiciones.slice(-1) : 'Prioridad ' + g.posiciones[0]);
 function planTab(n) {
   if (!n.prioridades?.confirmadas) return `<div class="card crema"><h3>Primero, las prioridades</h3><p class="muted" style="margin:8px 0 16px">El plan de acción sale de las 3 prioridades confirmadas.</p><a class="btn" href="#/negocio/${n.id}/resultados">Ver prioridades</a></div>`;
   const acc = E.accionesDe(n, n.prioridades.ids);
@@ -385,8 +386,8 @@ function planTab(n) {
     <section class="card mant"><div class="head" style="margin:0"><div><h3>Plan de acción · 90 días</h3>
       <p class="muted">Cada protocolo lo aplica el responsable interno del negocio, con tu acompañamiento. Marca cada acción cuando esté hecha.</p></div>
       <span class="tag ${t.hechas === t.total ? 'ok' : 'info'}">${t.hechas} de ${t.total} acciones hechas</span></div></section>
-    <div class="prios">${acc.map((a, k) => `<article class="prio"><span class="n">${k + 1}. ${a.prot} · ${esc(pilar(a.q.p).nombre)}</span>
-      <h4>${esc(a.nombre)}</h4><p class="small muted">Para resolver: ${esc(a.q.problema)}</p>
+    <div class="prios">${acc.map(a => `<article class="prio"><span class="n">${posTxt(a)} · ${a.prot} · ${esc(pilar(a.q.p).nombre)}</span>
+      <h4>${esc(a.nombre)}</h4><div class="small muted">Para resolver:<ul style="margin:4px 0 0;padding-left:18px">${a.preguntas.map(q => `<li>${esc(q.problema)}</li>`).join('')}</ul></div>
       <div class="stack" style="gap:8px">${a.acciones.map(x => `<label class="kpi-opt"><input type="checkbox" data-act="accion" data-id="${n.id}" data-k="${x.clave}" ${x.hecha ? 'checked' : ''} ${editable ? '' : 'disabled'}><span>${esc(x.texto)}${x.hecha ? `<small>Hecha el ${fecha(x.hecha)}</small>` : ''}</span></label>`).join('')}</div>
     </article>`).join('')}</div>
     ${E.alertas(n).filter(a => a.texto.startsWith('Prioridad sin avances')).map(a => `<div class="notice">${esc(a.texto)}</div>`).join('')}
@@ -406,7 +407,7 @@ function indicadoresTab(n) {
   return `<div class="stack">
     <section class="card mant"><div class="head" style="margin:0"><div><h3>Línea base · semanas 1 y 2</h3>
       <p class="muted">Elige entre 3 y 6 indicadores (sugeridos por las prioridades) y fija tú el objetivo a 90 días. Si el negocio aún no tiene el dato, deja el valor inicial vacío: la línea base será la primera medición.</p></div>
-      ${n.seguimiento?.confirmado ? `<span class="tag ok">Seguimiento desde ${E.nombreMes(n, 1)}</span>` : ''}</div></section>
+      ${n.seguimiento?.confirmado ? `<span class="tag ok">Seguimiento en marcha</span>` : ''}</div></section>
     <section class="card"><h3 style="margin-bottom:6px">Seleccionados (${sel.length} de 6)</h3>
       ${sel.length ? `<div class="stack">${sel.map(s => { const k = kpi(s.id); return `<div class="grid2" style="align-items:end;border-top:1px solid var(--linea);padding-top:14px">
         <div><b>${k.id} · ${esc(k.nombre)}</b> <span class="tag ${k.impl ? 'aviso' : 'info'}" style="font-size:12px">${k.impl ? 'Requiere implantación' : 'Dato fácil'}</span><br><span class="small muted">${esc(k.formula)}</span></div>
@@ -453,8 +454,8 @@ function seguimientoTab(n) {
   const pend = E.mesPendiente(n);
   return `<div class="stack">
     <section class="card mant"><div class="head" style="margin:0"><div><h3>Seguimiento mensual</h3>
-      <p class="muted">Desde ${E.nombreMes(n, 1)}. El responsable del negocio mete el dato de cada mes como tarde el día ${E.DIA_LIMITE} del mes siguiente; tú lo revisas y también puedes meterlo.</p></div>
-      ${pend ? `<span class="tag aviso">Toca registrar ${E.nombreMes(n, pend)}</span>` : '<span class="tag ok">Todo al día</span>'}</div></section>
+      <p class="muted">El mes 1 empezó el ${fecha(n.seguimiento.inicio)}. El responsable del negocio mete el dato de cada mes como tarde el día ${E.DIA_LIMITE} del mes siguiente; tú lo revisas y también puedes meterlo.</p></div>
+      ${pend ? `<span class="tag aviso">Toca registrar el mes ${pend}</span>` : '<span class="tag ok">Todo al día</span>'}</div></section>
     ${al.length ? `<ul class="alerts">${al.map(a => `<li class="${a.tipo}"><span class="dot"></span><span>${esc(a.texto)}</span></li>`).join('')}</ul>` : ''}
     <div class="kpi-cards">${n.seguimiento.kpis.map(s => kpiCard(n, s, yo().rol === 'admin')).join('')}</div>
   </div>`;
@@ -467,7 +468,7 @@ function visitasTab(n) {
   return `<div class="cols-2-1">
     <section class="card stack"><h3>Visitas</h3>
       <form class="grid2" data-form="visita" data-id="${n.id}" style="align-items:end" novalidate>
-        <label class="field"><span>Fecha</span><input class="input" type="date" name="fecha" value="${new Date().toISOString().slice(0, 10)}"></label>
+        <label class="field"><span>Fecha</span><input class="input" type="date" name="fecha" value="${E.ahora().toISOString().slice(0, 10)}"></label>
         <label class="field" style="grid-column:1/-1"><span>Notas de la visita</span><textarea class="input" name="nota" rows="2" placeholder="Qué se hizo, qué se acordó"></textarea></label>
         <div><button class="btn sec" type="submit" data-mut>Añadir visita</button></div>
       </form>
@@ -537,12 +538,12 @@ function duenoView(n, preview = false) {
     <div class="cols-2-1 owner-cols">
       <div class="stack">
         ${conf ? `<section class="card"><h3 style="margin-bottom:16px">Tus 3 prioridades</h3><div class="stack">${acciones.map((a, k) => `<div style="${k ? 'border-top:1px solid var(--linea);padding-top:16px' : ''}">
-            <span class="small muted">${k + 1} · ${esc(pilar(a.q.p).nombre)} · ${a.prot}</span><h4 style="font-size:17px;margin:4px 0 8px">${esc(a.q.problema)}</h4>
+            <span class="small muted">${posTxt(a)} · ${esc(pilar(a.q.p).nombre)} · ${a.prot} ${esc(a.nombre)}</span>${a.preguntas.map(q => `<h4 style="font-size:17px;margin:4px 0 8px">${esc(q.problema)}</h4>`).join('')}
             <ul class="action-list">${a.acciones.map(x => `<li class="${x.hecha ? 'done' : ''}">${x.hecha ? '<span class="sr">Hecho: </span>' : ''}${esc(x.texto)}</li>`).join('')}</ul></div>`).join('')}</div></section>` : ''}
         ${n.seguimiento?.confirmado ? `<section><h2 style="margin-bottom:16px">Tu evolución</h2><div class="kpi-cards">${n.seguimiento.kpis.map(s => kpiCard(n, s, false)).join('')}</div></section>` : ''}
       </div>
       <aside class="stack">
-        ${n.seguimiento?.confirmado ? (pend ? `<form class="card mant stack" data-form="dato-mes" data-id="${n.id}" data-m="${pend}"><div><span class="label">Dato del mes</span><h3 style="margin-top:6px">${E.nombreMes(n, pend)}</h3><p class="small muted">Plazo: día ${E.DIA_LIMITE} del mes siguiente.</p></div>
+        ${n.seguimiento?.confirmado ? (pend ? `<form class="card mant stack" data-form="dato-mes" data-id="${n.id}" data-m="${pend}"><div><span class="label">Dato del mes</span><h3 style="margin-top:6px">Mes ${pend}</h3><p class="small muted">Plazo: día ${E.DIA_LIMITE} del mes siguiente.</p></div>
             ${n.seguimiento.kpis.map(s => { const k = kpi(s.id), v = E.valoresKpi(n, s.id)[pend - 1]; return `<label class="field"><span class="small">${esc(k.nombre)} (${k.unidad})</span><input class="input num" inputmode="decimal" name="${k.id}" value="${numIn(v)}" ${puedeDato ? '' : 'disabled'}></label>`; }).join('')}
             ${puedeDato ? '<button class="btn" type="submit">Guardar datos del mes</button>' : '<p class="small muted">Aquí el responsable mete sus datos.</p>'}</form>`
           : `<section class="card cielo"><h3>Todo al día</h3><p class="muted" style="margin-top:8px">No tienes datos pendientes.</p></section>`) : ''}
@@ -572,11 +573,11 @@ function informeView(n) {
   const back = u.rol === 'dueno' ? '#/mi-negocio' : `#/negocio/${n.id}/resultados`;
   const destinatarios = S.usuariosDe(n.id).map(x => x.email).join(',');
   const asunto = encodeURIComponent(`Informe de ${n.nombre} · ${cfg().nombre}`);
-  const cuerpo = encodeURIComponent(`Hola:\n\nTe envío el informe de ${n.nombre}.\n${cfg().indice}: ${p.indice} % (${p.nivel.nombre}).\nPrioridades: ${acc.map(a => a.q.problema).join(' / ')}\n${n.informe?.proximaVisita ? 'Próxima visita: ' + fecha(n.informe.proximaVisita) + '\n' : ''}\nUn saludo,\n${consultora?.nombre || ''}`);
+  const cuerpo = encodeURIComponent(`Hola:\n\nTe envío el informe de ${n.nombre}.\n${cfg().indice}: ${p.indice} % (${p.nivel.nombre}).\nPrioridades: ${ids.map(id => pregunta(id).problema).join(' / ')}\n${n.informe?.proximaVisita ? 'Próxima visita: ' + fecha(n.informe.proximaVisita) + '\n' : ''}\nUn saludo,\n${consultora?.nombre || ''}`);
   return layout(`<div class="report">
     <div class="btns no-print" style="justify-content:space-between"><a class="crumb" href="${back}" style="margin:0">${ico.back} Volver</a>
       <div class="btns">${u.rol === 'admin' ? `<a class="btn sec" href="mailto:${esc(destinatarios)}?subject=${asunto}&body=${cuerpo}">${ico.mail} Enviar por correo</a>` : ''}<button class="btn" data-act="imprimir">${ico.doc} Descargar PDF</button></div></div>
-    <header class="report-head"><div><span class="label">Informe para el cliente · ${fecha(new Date().toISOString())}</span><h1 style="margin-top:6px">${esc(n.nombre)}</h1>
+    <header class="report-head"><div><span class="label">Informe para el cliente · ${fecha(E.ahora().toISOString())}</span><h1 style="margin-top:6px">${esc(n.nombre)}</h1>
       <p class="muted">${esc(n.tipo)} · ${esc(n.municipio)} · Fase: ${esc(E.fase(n).nombre)} · Consultora: ${esc(consultora?.nombre || '')}</p></div>
       <div class="brand-r"><span class="mark">${esc(marca())}</span>${esc(cfg().nombre)}</div></header>
     ${n.diagnosticoFinal ? comparativaCard(n) : `<div class="row" style="grid-template-columns:minmax(0,.8fr) minmax(0,1.3fr)">
@@ -584,9 +585,9 @@ function informeView(n) {
     ${n.informe?.valoracion ? `<section class="card mant"><h3 style="margin-bottom:10px">Valoración de la consultora</h3><p>${esc(n.informe.valoracion)}</p><p class="small muted" style="margin-top:10px">${esc(consultora?.nombre || '')}</p></section>` : ''}
     <section class="card"><h3 style="margin-bottom:6px">Prioridades ${conf ? '' : '(propuesta)'}</h3><p class="muted small" style="margin-bottom:16px">Los tres problemas que más pesan hoy y el protocolo para resolverlos.${conf ? ` Acciones hechas: ${t.hechas} de ${t.total}.` : ''}</p>
       <table><thead><tr><th>#</th><th>Problema</th><th>Pilar</th><th>Protocolo</th></tr></thead><tbody>
-      ${acc.map((a, k) => `<tr><td>${k + 1}</td><td><b>${esc(a.q.problema)}</b><br><span class="muted small">${esc(a.q.texto)}</span></td><td>${esc(pilar(a.q.p).nombre)}</td><td>${a.prot}<br><span class="muted small">${esc(a.nombre)}</span></td></tr>`).join('')}
+      ${ids.map((id, k) => { const q = pregunta(id); return `<tr><td>${k + 1}</td><td><b>${esc(q.problema)}</b><br><span class="muted small">${esc(q.texto)}</span></td><td>${esc(pilar(q.p).nombre)}</td><td>${q.prot}<br><span class="muted small">${esc(PROTOCOLOS[q.prot].nombre)}</span></td></tr>`; }).join('')}
       </tbody></table></section>
-    ${seg ? `<section class="card"><h3 style="margin-bottom:6px">Evolución de los indicadores</h3><p class="muted small" style="margin-bottom:16px">Desde ${E.nombreMes(n, 1)}. Objetivo a 90 días.</p>
+    ${seg ? `<section class="card"><h3 style="margin-bottom:6px">Evolución de los indicadores</h3><p class="muted small" style="margin-bottom:16px">Mes 1 = primer mes después de la línea base. Objetivo a 90 días.</p>
       <div style="overflow-x:auto"><table><thead><tr><th>Indicador</th><th class="r">Base</th>${Array.from({ length: meses }, (_, i) => `<th class="r">${mesCorto(n, i + 1)}</th>`).join('')}<th class="r">Objetivo</th><th class="r">Avance</th></tr></thead><tbody>
       ${seg.kpis.map(s => { const k = kpi(s.id), v = E.valoresKpi(n, s.id); const vals = Array.from({ length: meses }, (_, i) => v[i] ?? null); const act = [...vals].reverse().find(E.valorDef); const c = E.cumplimiento(k, E.baseEfectiva(n, s), s.objetivo, act);
         return `<tr><td><b>${esc(k.nombre)}</b></td><td class="r">${E.fmt(s.base, k.unidad)}</td>${vals.map(x => `<td class="r">${E.fmt(x, k.unidad)}</td>`).join('')}<td class="r">${E.fmt(s.objetivo, k.unidad)}</td><td class="r"><b>${c != null ? c + ' %' : '—'}</b></td></tr>`; }).join('')}
@@ -596,7 +597,7 @@ function informeView(n) {
     <section class="card mant"><h3 style="margin-bottom:14px">Próximas acciones</h3>
       <ul class="action-list">
         ${n.informe?.proximaVisita ? `<li>Próxima visita: ${fecha(n.informe.proximaVisita)}.</li>` : ''}
-        ${pend && seg ? `<li>Registrar los datos de ${E.nombreMes(n, pend)} (plazo: día ${E.DIA_LIMITE} del mes siguiente).</li>` : ''}
+        ${pend && seg ? `<li>Registrar los datos del mes ${pend} (plazo: día ${E.DIA_LIMITE} del mes siguiente).</li>` : ''}
         ${!av.completo ? `<li>Terminar el diagnóstico (${av.hechas} de ${av.total} preguntas).</li>` : ''}
         ${al.map(a => `<li>Revisar: ${esc(a.texto.charAt(0).toLowerCase() + a.texto.slice(1))}.</li>`).join('')}
         ${acc.flatMap(a => a.acciones.filter(x => !x.hecha).slice(0, 1)).map(x => `<li>${esc(x.texto)}</li>`).join('')}
@@ -713,7 +714,7 @@ document.addEventListener('click', async ev => {
         if (ronda === 'final') n.diagnosticoFinal.respuestas = { ...n.diagnosticoFinal.respuestas, [el.dataset.q]: v };
         else {
           n.respuestas = { ...(n.respuestas || {}), [el.dataset.q]: v };
-          n.fechaDiagnostico = n.fechaDiagnostico || new Date().toISOString();
+          n.fechaDiagnostico = n.fechaDiagnostico || E.ahora().toISOString();
           if (n.prioridades && !n.prioridades.confirmadas) n.prioridades = { ids: [], confirmadas: false };
         }
       });
@@ -725,7 +726,7 @@ document.addEventListener('click', async ev => {
     case 'confirmar-prio': {
       const n = S.negocio(id), cambiada = E.prioridadesActuales(n).join() !== E.prioridadesPropuestas(n).join();
       if (cambiada && !(n.prioridades?.motivo || '').trim()) { toast('Escribe el motivo del cambio'); document.querySelector('[data-act="motivo"]')?.focus(); return; }
-      S.actualizar(id, x => { x.prioridades = { ids: E.prioridadesActuales(x), confirmadas: true, fecha: new Date().toISOString(), motivo: cambiada ? x.prioridades.motivo : '', cumplidas: [] }; });
+      S.actualizar(id, x => { x.prioridades = { ids: E.prioridadesActuales(x), confirmadas: true, fecha: E.ahora().toISOString(), motivo: cambiada ? x.prioridades.motivo : '', cumplidas: [] }; });
       toast('Prioridades confirmadas'); go(`#/negocio/${id}/indicadores`); break;
     }
     case 'desconfirmar': S.actualizar(id, n => { n.prioridades.confirmadas = false; }); render(); break;
@@ -740,11 +741,11 @@ document.addEventListener('click', async ev => {
       toast('Prioridad cumplida: se activó la siguiente candidata'); render();
     }); break;
     case 'diag-final': dosPasos('final-' + id, () => {
-      S.actualizar(id, n => { n.diagnosticoFinal = { fecha: new Date().toISOString(), respuestas: {} }; });
+      S.actualizar(id, n => { n.diagnosticoFinal = { fecha: E.ahora().toISOString(), respuestas: {} }; });
       ui.ronda[id] = 'final'; go(`#/negocio/${id}/diagnostico`);
     }); break;
     case 'confirmar-kpi':
-      S.actualizar(id, n => { const d = new Date(); d.setDate(1); d.setHours(12, 0, 0, 0); n.seguimiento.confirmado = true; n.seguimiento.fecha = new Date().toISOString(); n.seguimiento.inicio = n.seguimiento.inicio || d.toISOString(); n.valores = n.valores || {}; });
+      S.actualizar(id, n => { const d = E.ahora(); d.setDate(1); d.setHours(12, 0, 0, 0); n.seguimiento.confirmado = true; n.seguimiento.fecha = E.ahora().toISOString(); n.seguimiento.inicio = n.seguimiento.inicio || d.toISOString(); n.valores = n.valores || {}; });
       toast('Seguimiento mensual en marcha'); go(`#/negocio/${id}/seguimiento`); break;
     case 'imprimir': window.print(); break;
   }
@@ -774,7 +775,7 @@ document.addEventListener('change', ev => {
     S.actualizar(id, n => { n.valores = n.valores || {}; const arr = [...E.valoresKpi(n, el.dataset.k)]; arr[Number(el.dataset.m) - 1] = parseNum(el.value); n.valores[el.dataset.k] = arr; });
     keep(); toast('Dato guardado');
   } else if (act === 'accion') {
-    S.actualizar(id, n => { n.acciones = n.acciones || {}; if (el.checked) n.acciones[el.dataset.k] = new Date().toISOString(); else delete n.acciones[el.dataset.k]; });
+    S.actualizar(id, n => { n.acciones = n.acciones || {}; if (el.checked) n.acciones[el.dataset.k] = E.ahora().toISOString(); else delete n.acciones[el.dataset.k]; });
     keep();
   }
 });

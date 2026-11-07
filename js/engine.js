@@ -10,6 +10,10 @@ export const MESES_PROGRAMA = 3;
 export const MAX_MESES = 12;
 const DIA = 86400000;
 
+// Fecha simulada de la demostración: todo el prototipo trabaja en 2027 para que no aparezcan fechas reales.
+export const FECHA_DEMO = '2027-07-14T12:00:00';
+export const ahora = () => new Date(FECHA_DEMO);
+
 export const respondida = v => v === 0 || v === 1 || v === 2 || v === 'na';
 export const valorDef = v => v !== null && v !== undefined && v !== '' && !Number.isNaN(v);
 
@@ -97,13 +101,22 @@ export function kpisSugeridos(ids) {
   return out.slice(0, 6);
 }
 
-export const claveAccion = (qid, i) => `${qid}-${i}`;
+// Plan de acción: un bloque por protocolo. Si dos prioridades comparten protocolo, se muestra una sola vez.
+export const claveAccion = (prot, i) => `${prot}-${i}`;
 export function accionesDe(n, ids) {
-  return ids.map(id => {
-    const q = pregunta(id), prot = PROTOCOLOS[q.prot];
-    const acciones = prot.acciones.map((t, i) => ({ texto: t, clave: claveAccion(id, i), hecha: n.acciones?.[claveAccion(id, i)] || null }));
-    return { q, prot: q.prot, nombre: prot.nombre, acciones };
+  const grupos = [];
+  ids.forEach((id, k) => {
+    const q = pregunta(id);
+    let g = grupos.find(x => x.prot === q.prot);
+    if (!g) {
+      const prot = PROTOCOLOS[q.prot];
+      g = { prot: q.prot, nombre: prot.nombre, q, preguntas: [], posiciones: [],
+        acciones: prot.acciones.map((t, i) => ({ texto: t, clave: claveAccion(q.prot, i), hecha: n.acciones?.[claveAccion(q.prot, i)] || null })) };
+      grupos.push(g);
+    }
+    g.preguntas.push(q); g.posiciones.push(k + 1);
   });
+  return grupos;
 }
 export function accionesHechas(n) {
   if (!n.prioridades?.confirmadas) return { hechas: 0, total: 0 };
@@ -121,10 +134,10 @@ export const FASES = [
   { id: 'continuidad', nombre: 'Continuidad', cuando: 'Desde el mes 4' },
 ];
 
-export const semanaPrograma = (n, hoy = new Date()) =>
+export const semanaPrograma = (n, hoy = ahora()) =>
   n.prioridades?.fecha ? Math.floor((hoy - new Date(n.prioridades.fecha)) / DIA / 7) + 1 : 0;
 
-export function fase(n, hoy = new Date()) {
+export function fase(n, hoy = ahora()) {
   const d = avanceDiagnostico(n);
   if (!d.completo || !n.prioridades?.confirmadas)
     return { id: 'diagnostico', nombre: 'Diagnóstico', pct: Math.round(15 * d.hechas / d.total), semana: 0 };
@@ -139,17 +152,17 @@ export function fase(n, hoy = new Date()) {
 // ---------- Seguimiento mensual ----------
 function sumarMeses(iso, m) { const d = new Date(iso); d.setDate(1); d.setHours(12, 0, 0, 0); d.setMonth(d.getMonth() + m); return d; }
 export const mesFecha = (n, m) => sumarMeses(n.seguimiento.inicio, m - 1);
-export const nombreMes = (n, m) => mesFecha(n, m).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+export const nombreMes = (n, m) => `mes ${m}`;
 export function limiteMes(n, m) { const d = sumarMeses(n.seguimiento.inicio, m); d.setDate(DIA_LIMITE); d.setHours(23, 59, 0, 0); return d; }
 
 // Meses cuyo plazo ya venció (día 5 del mes siguiente).
-export function mesesVencidos(n, hoy = new Date()) {
+export function mesesVencidos(n, hoy = ahora()) {
   if (!n.seguimiento?.confirmado) return 0;
   let c = 0; while (c < MAX_MESES && hoy > limiteMes(n, c + 1)) c++;
   return c;
 }
 // Meses que se muestran: los 3 del programa y, en continuidad, los que vayan pasando.
-export function mesesVisibles(n, hoy = new Date()) {
+export function mesesVisibles(n, hoy = ahora()) {
   if (!n.seguimiento?.confirmado) return MESES_PROGRAMA;
   const transcurridos = Math.floor((hoy - mesFecha(n, 1)) / DIA / 30.44) + 1;
   return Math.max(MESES_PROGRAMA, Math.min(MAX_MESES, transcurridos));
@@ -162,7 +175,7 @@ export const mesCompleto = (n, m) => {
 };
 
 // Mes que toca registrar: el primero incompleto que ya empezó.
-export function mesPendiente(n, hoy = new Date()) {
+export function mesPendiente(n, hoy = ahora()) {
   if (!n.seguimiento?.confirmado) return null;
   for (let m = 1; m <= MAX_MESES; m++) {
     if (mesFecha(n, m) > hoy) return null;
@@ -195,7 +208,7 @@ export function cumplimiento(k, base, obj, actual) {
   return Math.max(-100, Math.min(150, Math.round((a - b) / (o - b) * 100)));
 }
 
-export function alertas(n, hoy = new Date()) {
+export function alertas(n, hoy = ahora()) {
   const out = [];
   const d = avanceDiagnostico(n);
   if (!d.completo) out.push({ tipo: d.hechas ? 'aviso' : 'info', texto: d.hechas ? `Diagnóstico sin terminar (${d.hechas} de ${d.total})` : 'Diagnóstico sin empezar', tab: 'diagnostico' });
@@ -204,7 +217,7 @@ export function alertas(n, hoy = new Date()) {
   if (n.seguimiento?.confirmado) {
     const venc = mesesVencidos(n, hoy);
     for (let m = 1; m <= venc; m++) if (!mesCompleto(n, m))
-      out.push({ tipo: 'alerta', texto: `Falta el dato de ${nombreMes(n, m)} (plazo: día ${DIA_LIMITE})`, tab: 'seguimiento' });
+      out.push({ tipo: 'alerta', texto: `Falta el dato del mes ${m} (plazo: día ${DIA_LIMITE} del mes siguiente)`, tab: 'seguimiento' });
     n.seguimiento.kpis.forEach(s => {
       const k = kpi(s.id);
       const serie = [s.base, ...valoresKpi(n, s.id)].filter(valorDef).map(Number);

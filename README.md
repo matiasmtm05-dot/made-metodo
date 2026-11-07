@@ -25,11 +25,11 @@ El contenido del método está en `js/data.js` y las reglas en `js/engine.js`.
 
 | Rol | Acceso |
 | --- | --- |
-| Consultora | consultora@demo.es · contraseña `demo2026` |
-| Solo lectura (evaluadores) | evaluador@demo.es · contraseña `demo2026` |
-| Dueños | Entran con un enlace al correo, sin contraseña. En el prototipo el enlace se abre en pantalla: txoko@demo.es, itsasargi@demo.es, goxoki@demo.es |
+| Consultora | consultora@demo.es · contraseña `demo1234` |
+| Solo lectura (evaluadores) | evaluador@demo.es · contraseña `demo1234` |
+| Dueños | Entran con un enlace al correo, sin contraseña. En el prototipo el enlace se abre en pantalla: bar.ejemplo@demo.es, restaurante.demo@demo.es, obrador.prueba@demo.es |
 
-Negocios de ejemplo: Bar Txoko (consolidación, con alertas), Itsasargi Jatetxea (90 días cerrados y continuidad) y Goxoki Etxea (diagnóstico a medias).
+Negocios ficticios: Bar Ejemplo (consolidación, con alertas), Restaurante Demo (90 días cerrados y continuidad) y Obrador Prueba (diagnóstico a medias). El prototipo trabaja con una fecha simulada en 2027 y numera los meses del programa (mes 1, mes 2, mes 3) para no mostrar fechas reales.
 
 ## Tecnología
 

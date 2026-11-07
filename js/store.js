@@ -1,11 +1,11 @@
 // Almacenamiento del prototipo: los datos (todos ficticios) viven en el navegador (localStorage).
 // La capa está aislada aquí para conectarla después a la base de datos en la UE (Supabase, Fráncfort).
 import { PREGUNTAS } from './data.js';
-import { prioridadesPropuestas, kpisSugeridos } from './engine.js';
+import { prioridadesPropuestas, kpisSugeridos, ahora } from './engine.js';
 
-const KEY = 'plataforma.hosteleria.v2';
+const KEY = 'plataforma.hosteleria.v3';
 const SESSION = 'plataforma.hosteleria.sesion';
-export const DEMO_PASS = 'demo2026';
+export const DEMO_PASS = 'demo1234';
 
 const mem = { data: null, session: null };
 function readLS(k) { try { return localStorage.getItem(k); } catch { return null; } }
@@ -19,7 +19,7 @@ export async function hash(text) {
 }
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
-const hoy = () => { const d = new Date(); d.setHours(12, 0, 0, 0); return d; };
+const hoy = () => ahora();
 const diasAtras = n => new Date(hoy().getTime() - n * 86400000).toISOString();
 function primeroDeMes(atras) { const d = hoy(); d.setDate(1); d.setMonth(d.getMonth() - atras); return d.toISOString(); }
 function resp(lista) { const r = {}; PREGUNTAS.forEach((q, i) => { if (lista[i] !== undefined) r[q.id] = lista[i]; }); return r; }
@@ -33,13 +33,13 @@ export const CONFIG_INICIAL = {
 async function semilla() {
   const pass = await hash(DEMO_PASS);
 
-  // 1 · Bar Txoko — consolidación; falta el dato de octubre y un indicador empeora dos meses seguidos.
+  // 1 · Bar Ejemplo — consolidación; falta el dato del mes 2 y un indicador empeora dos meses seguidos.
   // Respuestas = ejemplo del Modelo de Diagnóstico v3 (índice 19 %, prioridades Q03, Q07 y Q04).
   const txoko = {
-    id: 'n-txoko', nombre: 'Bar Txoko', tipo: 'Bar-cafetería', municipio: 'Aretxabaleta', soloRevende: false,
+    id: 'n-txoko', nombre: 'Bar Ejemplo (ficticio)', tipo: 'Bar-cafetería', municipio: 'Aretxabaleta', soloRevende: false,
     aforo: 40, personas: 4, horario: '7:30 a 23:00', ventasRango: '10.000 a 20.000 €', ticket: 9.5, ticketsDia: 140,
     notaGoogle: 4.1, resenasGoogle: 86, tpvInformes: false, gestoria: true, redesQuien: 'El dueño', fichaGoogle: true,
-    contacto: 'Iñaki (dueño)', preocupacion: 'Vendo bien pero a final de mes no me queda dinero.',
+    contacto: 'Dueño (ficticio)', preocupacion: 'Vendo bien pero a final de mes no me queda dinero.',
     dias: ['L', 'M', 'X', 'J', 'V', 'S'], canales: ['Sala', 'Barra', 'Terraza'],
     creado: diasAtras(75), fechaDiagnostico: diasAtras(72),
     respuestas: resp([1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 'na', 0]),
@@ -52,21 +52,21 @@ async function semilla() {
     { id: 'K05', base: 1200, objetivo: 2500 },
   ] };
   txoko.valores = { K04: [5.1, 5.6], K06: [36.5, 35.2], K07: [3.25, 3.4], K05: [1050] };
-  txoko.acciones = { 'Q03-0': diasAtras(60), 'Q07-0': diasAtras(25), 'Q07-1': diasAtras(12) };
+  txoko.acciones = { 'P-02-0': diasAtras(60), 'P-04-0': diasAtras(25), 'P-04-1': diasAtras(12) };
   txoko.visitas = [
-    { id: uid(), fecha: diasAtras(72), nota: 'Diagnóstico con Iñaki. Ventas fuertes en desayunos; nadie apunta lo que se invita.' },
+    { id: uid(), fecha: diasAtras(72), nota: 'Diagnóstico con el dueño. Ventas fuertes en desayunos; nadie apunta lo que se invita.' },
     { id: uid(), fecha: diasAtras(55), nota: 'Arrancamos hoja de consumos. El equipo la usa solo en el turno de mañana.' },
     { id: uid(), fecha: diasAtras(20), nota: 'Escandallo de los 10 pinchos más vendidos. Dos dan pérdida: subir precio.' },
   ];
-  txoko.notasPrivadas = 'Iñaki se resiste a apuntar invitaciones a amigos. Insistir con datos de octubre.';
+  txoko.notasPrivadas = 'El dueño se resiste a apuntar invitaciones a amigos. Insistir con los datos del mes 2.';
   txoko.informe = { valoracion: 'El negocio vende bien, pero pierde margen en lo que sale sin cobrar. Los escandallos ya muestran dónde ajustar precios.', proximaVisita: diasAtras(-6).slice(0, 10) };
 
-  // 2 · Itsasargi — programa de 90 días cerrado, diagnóstico final y continuidad.
+  // 2 · Restaurante Demo — programa de 90 días cerrado, diagnóstico final y continuidad.
   const itsas = {
-    id: 'n-itsasargi', nombre: 'Itsasargi Jatetxea', tipo: 'Restaurante', municipio: 'Arrasate-Mondragón', soloRevende: false,
+    id: 'n-itsasargi', nombre: 'Restaurante Demo (ficticio)', tipo: 'Restaurante', municipio: 'Arrasate-Mondragón', soloRevende: false,
     aforo: 70, personas: 9, horario: '13:00 a 16:00 y 20:30 a 23:30', ventasRango: '40.000 a 80.000 €', ticket: 24, ticketsDia: 95,
     notaGoogle: 4.3, resenasGoogle: 412, tpvInformes: true, gestoria: true, redesQuien: 'Alguien del equipo', fichaGoogle: true,
-    contacto: 'Maite (dueña)', preocupacion: 'Los platos nuevos no sé si dan dinero.',
+    contacto: 'Dueña (ficticia)', preocupacion: 'Los platos nuevos no sé si dan dinero.',
     dias: ['M', 'X', 'J', 'V', 'S', 'D'], canales: ['Sala', 'Terraza', 'Encargos y eventos', 'WhatsApp'],
     creado: diasAtras(165), fechaDiagnostico: diasAtras(160),
     respuestas: resp([2, 2, 1, 2, 2, 0, 0, 1, 0, 1, 0, 2, 1, 0, 1, 2, 1, 0, 1, 1, 1, 0, 1, 0]),
@@ -82,37 +82,37 @@ async function semilla() {
     itsas.valores[s.id] = pasos.map(f => Math.round((s.base + (s.objetivo - s.base) * f) * 100) / 100);
   });
   itsas.acciones = {};
-  itsas.prioridades.ids.forEach((q, i) => { itsas.acciones[q + '-0'] = diasAtras(140 - i * 10); itsas.acciones[q + '-1'] = diasAtras(110 - i * 10); });
+  itsas.prioridades.ids.forEach((q, i) => { const p = PREGUNTAS.find(x => x.id === q).prot; itsas.acciones[p + '-0'] = diasAtras(140 - i * 10); itsas.acciones[p + '-1'] = diasAtras(110 - i * 10); });
   itsas.diagnosticoFinal = { fecha: diasAtras(70),
     respuestas: resp([2, 2, 2, 2, 2, 2, 1, 2, 1, 1, 1, 2, 2, 1, 1, 2, 1, 0, 1, 2, 1, 1, 1, 0]) };
   itsas.visitas = [
-    { id: uid(), fecha: diasAtras(160), nota: 'Diagnóstico con Maite y el jefe de cocina.' },
+    { id: uid(), fecha: diasAtras(160), nota: 'Diagnóstico con la dueña y el jefe de cocina.' },
     { id: uid(), fecha: diasAtras(120), nota: 'Recetas escritas de toda la carta de mediodía.' },
     { id: uid(), fecha: diasAtras(70), nota: 'Cierre de los 90 días y diagnóstico final.' },
   ];
   itsas.notasPrivadas = 'Buen candidato para la línea digital el próximo trimestre.';
   itsas.informe = { valoracion: 'En 90 días la cocina trabaja con recetas y escandallos: el coste de materia prima bajó al objetivo y el margen por plato subió.', proximaVisita: diasAtras(-12).slice(0, 10) };
 
-  // 3 · Goxoki Etxea — diagnóstico a medias.
+  // 3 · Obrador Prueba — diagnóstico a medias.
   const goxoki = {
-    id: 'n-goxoki', nombre: 'Goxoki Etxea', tipo: 'Obrador', municipio: 'Bergara', soloRevende: false,
+    id: 'n-goxoki', nombre: 'Obrador Prueba (ficticio)', tipo: 'Obrador', municipio: 'Bergara', soloRevende: false,
     aforo: 12, personas: 3, horario: '8:00 a 14:00 y 17:00 a 20:00', ventasRango: 'Menos de 10.000 €', ticket: 7, ticketsDia: 80,
     notaGoogle: 4.7, resenasGoogle: 58, tpvInformes: false, gestoria: true, redesQuien: 'Nadie', fichaGoogle: true,
-    contacto: 'Ane (encargada)', preocupacion: 'Hacemos encargos por WhatsApp pero se nos olvidan.',
+    contacto: 'Encargada (ficticia)', preocupacion: 'Hacemos encargos por WhatsApp pero se nos olvidan.',
     dias: ['M', 'X', 'J', 'V', 'S', 'D'], canales: ['Para llevar', 'Encargos y eventos', 'WhatsApp'],
     creado: diasAtras(2), fechaDiagnostico: diasAtras(1),
     respuestas: resp([2, 1, 1, 1, 0, 2, 1, 0, 1, 1, 1, 1, 2, 0]),
   };
 
   return {
-    version: 2,
+    version: 3,
     config: { ...CONFIG_INICIAL },
     usuarios: [
       { email: 'consultora@demo.es', nombre: 'Nataly Torres', rol: 'admin', pass },
       { email: 'evaluador@demo.es', nombre: 'Evaluador', rol: 'lectura', pass },
-      { email: 'txoko@demo.es', nombre: 'Iñaki', rol: 'dueno', negocioIds: ['n-txoko', 'n-goxoki'] },
-      { email: 'itsasargi@demo.es', nombre: 'Maite', rol: 'dueno', negocioIds: ['n-itsasargi'] },
-      { email: 'goxoki@demo.es', nombre: 'Ane', rol: 'dueno', negocioIds: ['n-goxoki'] },
+      { email: 'bar.ejemplo@demo.es', nombre: 'Dueño de ejemplo', rol: 'dueno', negocioIds: ['n-txoko', 'n-goxoki'] },
+      { email: 'restaurante.demo@demo.es', nombre: 'Dueña de ejemplo', rol: 'dueno', negocioIds: ['n-itsasargi'] },
+      { email: 'obrador.prueba@demo.es', nombre: 'Encargada de ejemplo', rol: 'dueno', negocioIds: ['n-goxoki'] },
     ],
     negocios: [txoko, itsas, goxoki],
   };
@@ -121,7 +121,7 @@ async function semilla() {
 export async function cargar() {
   if (mem.data) return mem.data;
   const raw = readLS(KEY);
-  if (raw) { try { mem.data = JSON.parse(raw); if (mem.data.version === 2) return mem.data; } catch { /* se regenera */ } }
+  if (raw) { try { mem.data = JSON.parse(raw); if (mem.data.version === 3) return mem.data; } catch { /* se regenera */ } }
   mem.data = await semilla(); guardar(); return mem.data;
 }
 export function guardar() { writeLS(KEY, JSON.stringify(mem.data)); }
@@ -131,7 +131,7 @@ export const datos = () => mem.data;
 export const config = () => mem.data.config;
 export function guardarConfig(c) { mem.data.config = { ...mem.data.config, ...c }; guardar(); }
 export const negocio = id => mem.data.negocios.find(n => n.id === id);
-export function actualizar(id, fn) { const n = negocio(id); fn(n); n.actualizado = new Date().toISOString(); guardar(); return n; }
+export function actualizar(id, fn) { const n = negocio(id); fn(n); n.actualizado = ahora().toISOString(); guardar(); return n; }
 
 export function sesion() {
   if (mem.session) return mem.session;
@@ -154,7 +154,7 @@ export function salir() { mem.session = null; writeLS(SESSION, null); }
 
 export function crearNegocio(ficha, acceso) {
   const id = 'n-' + uid();
-  const n = { id, ...ficha, creado: new Date().toISOString(), respuestas: {}, visitas: [], acciones: {} };
+  const n = { id, ...ficha, creado: ahora().toISOString(), respuestas: {}, visitas: [], acciones: {} };
   mem.data.negocios.push(n);
   if (acceso?.email) vincularDueno(id, acceso.email, acceso.nombre);
   guardar();
