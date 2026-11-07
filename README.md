@@ -1,58 +1,41 @@
-# Made · Método
+# Plataforma de diagnóstico y seguimiento para pequeña hostelería
 
-Prototipo funcional de la plataforma del **Método Made**: diagnóstico digital, priorización automática e indicadores de seguimiento para negocios de hostelería (bares, restaurantes, reposterías…).
-
-> Prototipo en construcción. Solo usa **datos ficticios** (3 negocios de ejemplo inventados).
+Prototipo funcional. **Solo datos ficticios.** El nombre definitivo está pendiente: se cambia en *Ajustes* y se actualiza en toda la plataforma y en los informes.
 
 ## Qué demuestra
 
-1. **Método sistematizado.** 24 preguntas cerradas en 5 pilares, con la evidencia que hay que pedir para cada respuesta.
-2. **Funciona con datos y mide resultados.** Calcula el Índice Made (0–100) por pilar y en global, y hace el seguimiento mensual de los indicadores con gráficas.
-3. **Escalable.** Una consultora gestiona muchos negocios a la vez desde un panel con fases, avance y alertas.
+1. **El método está sistematizado.** 24 prácticas observables en 5 pilares, puntuadas 0, 1, 2 o N/A con la evidencia que hay que pedir, y un motor de priorización con reglas explícitas.
+2. **Funciona con datos y mide resultados.** Línea base, objetivo a 90 días, dato mensual, gráficas, alertas y comparación entre el diagnóstico inicial y el final.
+3. **Es escalable.** La consultora gestiona varios negocios desde un panel con fases, avance, alertas y la media de la cartera por pilar.
 
-## Módulos
+## Reglas (Modelo de Diagnóstico v3)
 
-| Módulo | Dónde |
-| --- | --- |
-| Ficha del negocio (tipo, municipio, aforo, ticket medio, días, canales) | Negocio → Ficha |
-| Diagnóstico de 24 preguntas (0 / 1 / 2 / N/A) | Negocio → Diagnóstico |
-| Índice Made por pilar y global, bloqueo de la línea digital | Negocio → Resultados |
-| Motor de priorización: 2 × impacto + urgencia + viabilidad + sostenibilidad + bono de cimientos | Negocio → Resultados |
-| Selección de 3 a 6 indicadores del banco de 26, con valor inicial y objetivo a 90 días | Negocio → Indicadores |
-| Seguimiento mensual con gráficas y alertas | Negocio → Seguimiento |
-| Informe para el cliente (web y PDF) | Botón «Informe» |
-| Panel de la consultora: fases, avance, alertas y cartera por pilar | Panel |
-| Vista del dueño (móvil): índice, prioridades, acciones y dato del mes | Acceso del dueño |
+- Pilar = puntos ÷ (2 × preguntas aplicables). Índice = media de los 5 pilares.
+- Niveles: menos de 40 % crítico · 40 a 69 % en desarrollo · 70 % o más sólido.
+- Prioridad = 2 × impacto + urgencia + viabilidad + sostenibilidad + bono de cimientos (+2 en P1 y P2 cuando su pilar está en nivel crítico).
+- Candidatas: preguntas con 0; si hay menos de 3, también las de 1. Desempate: mayor impacto, después P1 y P2, después el orden.
+- Activación digital: P4 y P5 no pueden ser prioridad hasta que P1 llegue al 40 %.
+- Seguimiento: 3 a 6 de los 26 KPI, objetivo fijado por la consultora, dato mensual hasta el día 5 del mes siguiente.
+- Alertas: dato pendiente, KPI que empeora un mes (aviso) o dos meses seguidos (alerta) y prioridad sin avances en 30 días.
+- Fases: diagnóstico, línea base (semanas 1 y 2), implantación (3 a 8), consolidación (9 a 12), cierre (12) y continuidad (desde el mes 4).
+
+El contenido del método está en `js/data.js` y las reglas en `js/engine.js`.
 
 ## Cuentas de demostración
 
-Contraseña de todas: `made2026`
-
-| Rol | Correo |
+| Rol | Acceso |
 | --- | --- |
-| Consultora | consultora@made.demo |
-| Dueño · Bar Txoko (en seguimiento, con alertas) | txoko@made.demo |
-| Dueño · Itsasargi Jatetxea (programa completado) | itsasargi@made.demo |
-| Dueño · Goxoki Etxea (diagnóstico a medias) | goxoki@made.demo |
+| Consultora | consultora@demo.es · contraseña `demo2026` |
+| Solo lectura (evaluadores) | evaluador@demo.es · contraseña `demo2026` |
+| Dueños | Entran con un enlace al correo, sin contraseña. En el prototipo el enlace se abre en pantalla: txoko@demo.es, itsasargi@demo.es, goxoki@demo.es |
+
+Negocios de ejemplo: Bar Txoko (consolidación, con alertas), Itsasargi Jatetxea (90 días cerrados y continuidad) y Goxoki Etxea (diagnóstico a medias).
 
 ## Tecnología
 
-- HTML, CSS y JavaScript sin dependencias ni paso de compilación. Se publica tal cual con GitHub Pages.
-- Tipografías de marca (Italiana y Space Grotesk) alojadas en el propio sitio: no se llama a servidores de terceros.
-- Los datos se guardan en el navegador de cada persona (`localStorage`). El botón «Restablecer datos de ejemplo» vuelve al estado inicial.
-- La capa de datos está aislada en `js/store.js` para conectarla en la siguiente fase a una base de datos con servidores en la UE (por ejemplo, Supabase en Fráncfort).
-
-## Estructura
-
-```
-index.html        Página única y logotipo de Made
-css/app.css       Estilos con el manual de marca de Made Studio
-js/data.js        Contenido del método: pilares, preguntas, protocolos e indicadores
-js/engine.js      Puntuaciones, niveles, priorización, fases y alertas
-js/store.js       Datos de ejemplo, sesión y almacenamiento
-js/charts.js      Gráficas en SVG
-js/app.js         Vistas y navegación
-```
+- HTML, CSS y JavaScript sin dependencias ni compilación.
+- Tipografías alojadas en el propio sitio (Public Sans y Source Serif 4, licencia OFL): no se llama a servidores de terceros.
+- Prototipo: los datos se guardan en el navegador de cada persona (`localStorage`). Siguiente fase: base de datos en la UE (Supabase, Fráncfort). La capa de datos está aislada en `js/store.js`.
 
 ## Probar en local
 
@@ -60,7 +43,3 @@ js/app.js         Vistas y navegación
 python3 -m http.server 8000
 # abre http://localhost:8000
 ```
-
----
-
-Made Studio · made for you

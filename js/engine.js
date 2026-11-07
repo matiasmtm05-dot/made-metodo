@@ -1,188 +1,231 @@
-// Motor del Método Made: puntuaciones, niveles, priorización, fases y alertas.
-import { PILARES, PREGUNTAS, KPIS, PROTOCOLOS, pilar, pregunta, kpi } from './data.js';
+// Motor del método: puntuaciones, niveles, priorización, fases y alertas.
+// Reglas según el «Modelo de Diagnóstico v3» (hoja Instrucciones) y las respuestas de la consultora.
+import { PILARES, PREGUNTAS, KPIS, PROTOCOLOS, SOLO_SI_ELABORA, pilar, pregunta, kpi } from './data.js';
 
-export const UMBRAL_CAJA = 40; // la línea digital se desbloquea con Caja clara ≥ 40 %
-export const MESES = 3;
+export const UMBRAL_DIGITAL = 40;   // P4 y P5 solo pueden ser prioridad cuando P1 llega al 40 %
+export const UMBRAL_BONO = 40;      // bono de cimientos: P1 o P2 en nivel crítico
+export const DIA_LIMITE = 5;        // el dato de un mes se mete como tarde el día 5 del mes siguiente
+export const DIAS_SIN_AVANCE = 30;  // alerta de prioridad sin avances
+export const MESES_PROGRAMA = 3;
+export const MAX_MESES = 12;
+const DIA = 86400000;
 
 export const respondida = v => v === 0 || v === 1 || v === 2 || v === 'na';
+export const valorDef = v => v !== null && v !== undefined && v !== '' && !Number.isNaN(v);
 
 export function nivel(pct) {
   if (pct == null) return { id: 'sin', nombre: 'Sin datos' };
   if (pct < 40) return { id: 'critico', nombre: 'Crítico' };
-  if (pct < 60) return { id: 'construccion', nombre: 'En construcción' };
-  if (pct < 80) return { id: 'solido', nombre: 'Sólido' };
-  return { id: 'referente', nombre: 'Referente' };
+  if (pct < 70) return { id: 'desarrollo', nombre: 'En desarrollo' };
+  return { id: 'solido', nombre: 'Sólido' };
 }
 
-export function avanceDiagnostico(n) {
-  const r = n.respuestas || {};
-  const hechas = PREGUNTAS.filter(q => respondida(r[q.id])).length;
-  return { hechas, total: PREGUNTAS.length, completo: hechas === PREGUNTAS.length };
+// Preguntas que se le hacen a este negocio (Q06 y Q07 se ocultan si solo revende).
+export function preguntasDe(n) {
+  return PREGUNTAS.filter(q => !(n?.soloRevende && SOLO_SI_ELABORA.includes(q.id)));
 }
 
-export function puntuaciones(n) {
-  const r = n.respuestas || {};
-  let totalPts = 0, totalMax = 0;
+export function avanceDiagnostico(n, resp = n.respuestas) {
+  const r = resp || {};
+  const qs = preguntasDe(n);
+  const hechas = qs.filter(q => respondida(r[q.id])).length;
+  return { hechas, total: qs.length, completo: hechas === qs.length };
+}
+
+// Pilar = puntos ÷ (2 × preguntas aplicables). Índice = media de los pilares con preguntas aplicables.
+export function puntuaciones(n, resp = n.respuestas) {
+  const r = resp || {};
+  const qs = preguntasDe(n);
   const porPilar = PILARES.map(p => {
-    const qs = PREGUNTAS.filter(q => q.p === p.id);
-    let pts = 0, max = 0, hechas = 0;
-    qs.forEach(q => {
+    const lista = qs.filter(q => q.p === p.id);
+    let pts = 0, aplicables = 0, hechas = 0;
+    lista.forEach(q => {
       const v = r[q.id];
       if (respondida(v)) hechas++;
-      if (v === 0 || v === 1 || v === 2) { pts += v; max += 2; }
+      if (v === 0 || v === 1 || v === 2) { pts += v; aplicables++; }
     });
-    totalPts += pts; totalMax += max;
-    const pct = max ? Math.round(pts / max * 100) : null;
-    return { ...p, pts, max, hechas, total: qs.length, pct };
+    const pct = aplicables ? Math.round(pts / (2 * aplicables) * 100) : null;
+    const exacto = aplicables ? pts / (2 * aplicables) * 100 : null;
+    return { ...p, pts, aplicables, hechas, total: lista.length, pct, exacto };
   });
-  const caja = porPilar[0].pct;
-  const bloqueoDigital = caja == null || caja < UMBRAL_CAJA;
+  const conDatos = porPilar.filter(p => p.exacto != null);
+  const indice = conDatos.length ? Math.round(conDatos.reduce((s, p) => s + p.exacto, 0) / conDatos.length) : null;
+  const p1 = porPilar[0].exacto;
+  const bloqueoDigital = p1 != null && p1 < UMBRAL_DIGITAL;
   porPilar.forEach(p => {
     p.bloqueado = !!p.digital && bloqueoDigital;
-    p.nivel = p.bloqueado ? { id: 'bloqueado', nombre: 'Bloqueado' } : nivel(p.pct);
+    p.nivel = nivel(p.pct);
   });
-  const indice = totalMax ? Math.round(totalPts / totalMax * 100) : null;
   return { pilares: porPilar, indice, nivel: nivel(indice), bloqueoDigital };
 }
 
-export function puntuarPregunta(q) {
-  const bono = pilar(q.p).cimiento ? 2 : 0;
-  return { total: 2 * q.imp + q.urg + q.via + q.sos + bono, bono };
+export function puntuarPregunta(q, pts) {
+  const pil = pts.pilares.find(p => p.id === q.p);
+  const bono = pilar(q.p).cimiento && pil.exacto != null && pil.exacto < UMBRAL_BONO ? 2 : 0;
+  return { base: 2 * q.imp + q.urg + q.via + q.sos, bono, total: 2 * q.imp + q.urg + q.via + q.sos + bono };
 }
 
-// Candidatas: respondidas con 0 o 1, fuera de pilares bloqueados. Orden: puntuación, luego 0 antes que 1.
-export function candidatas(n) {
-  const r = n.respuestas || {};
-  const { pilares } = puntuaciones(n);
-  const bloqueados = new Set(pilares.filter(p => p.bloqueado).map(p => p.id));
-  return PREGUNTAS
-    .filter(q => (r[q.id] === 0 || r[q.id] === 1) && !bloqueados.has(q.p))
-    .map((q, i) => ({ q, resp: r[q.id], ...puntuarPregunta(q), orden: PREGUNTAS.indexOf(q) }))
-    .sort((a, b) => b.total - a.total || a.resp - b.resp || a.orden - b.orden);
+// Candidatas: preguntas con 0 fuera de pilares bloqueados; si hay menos de 3, entran también las de 1.
+// Desempate: puntuación, mayor impacto, P1 y P2 antes que el resto, orden de la pregunta.
+export function candidatas(n, resp = n.respuestas) {
+  const r = resp || {};
+  const pts = puntuaciones(n, resp);
+  const bloq = new Set(pts.pilares.filter(p => p.bloqueado).map(p => p.id));
+  const libres = preguntasDe(n).filter(q => !bloq.has(q.p));
+  const ceros = libres.filter(q => r[q.id] === 0);
+  const elegibles = ceros.length >= 3 ? ceros : libres.filter(q => r[q.id] === 0 || r[q.id] === 1);
+  return elegibles
+    .map(q => ({ q, resp: r[q.id], ...puntuarPregunta(q, pts), orden: PREGUNTAS.indexOf(q) }))
+    .sort((a, b) => b.total - a.total || b.q.imp - a.q.imp
+      || (pilar(b.q.p).cimiento ? 1 : 0) - (pilar(a.q.p).cimiento ? 1 : 0) || a.orden - b.orden);
 }
 
-export function prioridadesPropuestas(n) {
-  return candidatas(n).slice(0, 3).map(c => c.q.id);
-}
+export const prioridadesPropuestas = n => candidatas(n).slice(0, 3).map(c => c.q.id);
 
 export function prioridadesActuales(n) {
-  if (n.prioridades && n.prioridades.ids && n.prioridades.ids.length) return n.prioridades.ids;
+  const p = n.prioridades;
+  if (p?.ids?.length) return p.ids;
   return prioridadesPropuestas(n);
 }
 
 export function kpisSugeridos(ids) {
   const out = [];
   ids.forEach(id => (pregunta(id)?.kpis || []).forEach(k => { if (!out.includes(k)) out.push(k); }));
-  // mínimo 3: completa con indicadores del mismo pilar
-  if (out.length < 3) {
-    ids.forEach(id => KPIS.filter(k => k.p === pregunta(id).p).forEach(k => {
-      if (out.length < 3 && !out.includes(k.id)) out.push(k.id);
-    }));
-  }
+  if (out.length < 3) ids.forEach(id => KPIS.filter(k => k.p === pregunta(id).p).forEach(k => {
+    if (out.length < 3 && !out.includes(k.id)) out.push(k.id);
+  }));
   return out.slice(0, 6);
 }
 
-export function accionesDe(ids) {
+export const claveAccion = (qid, i) => `${qid}-${i}`;
+export function accionesDe(n, ids) {
   return ids.map(id => {
-    const q = pregunta(id);
-    const prot = PROTOCOLOS[q.prot];
-    return { q, prot: q.prot, nombre: prot.nombre, acciones: prot.acciones };
+    const q = pregunta(id), prot = PROTOCOLOS[q.prot];
+    const acciones = prot.acciones.map((t, i) => ({ texto: t, clave: claveAccion(id, i), hecha: n.acciones?.[claveAccion(id, i)] || null }));
+    return { q, prot: q.prot, nombre: prot.nombre, acciones };
   });
 }
-
-// ---------- Seguimiento ----------
-function mesesEntre(desdeISO, hasta = new Date()) {
-  const d = new Date(desdeISO);
-  return (hasta.getFullYear() - d.getFullYear()) * 12 + (hasta.getMonth() - d.getMonth());
+export function accionesHechas(n) {
+  if (!n.prioridades?.confirmadas) return { hechas: 0, total: 0 };
+  const a = accionesDe(n, n.prioridades.ids).flatMap(x => x.acciones);
+  return { hechas: a.filter(x => x.hecha).length, total: a.length };
 }
 
-export function nombreMes(inicioISO, m) {
-  const d = new Date(inicioISO);
-  d.setDate(1);
-  d.setMonth(d.getMonth() + m - 1);
-  return d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+// ---------- Fases del programa (90 días) ----------
+export const FASES = [
+  { id: 'diagnostico', nombre: 'Diagnóstico', cuando: 'Semana 0' },
+  { id: 'linea-base', nombre: 'Línea base', cuando: 'Semanas 1 y 2' },
+  { id: 'implantacion', nombre: 'Implantación', cuando: 'Semanas 3 a 8' },
+  { id: 'consolidacion', nombre: 'Consolidación', cuando: 'Semanas 9 a 12' },
+  { id: 'cierre', nombre: 'Cierre', cuando: 'Semana 12' },
+  { id: 'continuidad', nombre: 'Continuidad', cuando: 'Desde el mes 4' },
+];
+
+export const semanaPrograma = (n, hoy = new Date()) =>
+  n.prioridades?.fecha ? Math.floor((hoy - new Date(n.prioridades.fecha)) / DIA / 7) + 1 : 0;
+
+export function fase(n, hoy = new Date()) {
+  const d = avanceDiagnostico(n);
+  if (!d.completo || !n.prioridades?.confirmadas)
+    return { id: 'diagnostico', nombre: 'Diagnóstico', pct: Math.round(15 * d.hechas / d.total), semana: 0 };
+  const s = semanaPrograma(n, hoy);
+  if (!n.seguimiento?.confirmado || s <= 2) return { id: 'linea-base', nombre: 'Línea base', pct: 20, semana: s };
+  if (n.diagnosticoFinal) return { id: 'continuidad', nombre: 'Continuidad', pct: 100, semana: s };
+  if (s <= 8) return { id: 'implantacion', nombre: 'Implantación', pct: 20 + Math.round((s - 2) / 6 * 40), semana: s };
+  if (s <= 12) return { id: 'consolidacion', nombre: 'Consolidación', pct: 60 + Math.round((s - 8) / 4 * 30), semana: s };
+  return { id: 'cierre', nombre: 'Cierre', pct: 95, semana: s };
 }
 
-// Meses cuyo dato ya debería estar registrado (el mes m se registra al terminar ese mes).
-export function mesesVencidos(n) {
-  if (!n.seguimiento?.inicio) return 0;
-  return Math.max(0, Math.min(MESES, mesesEntre(n.seguimiento.inicio)));
-}
+// ---------- Seguimiento mensual ----------
+function sumarMeses(iso, m) { const d = new Date(iso); d.setDate(1); d.setHours(12, 0, 0, 0); d.setMonth(d.getMonth() + m); return d; }
+export const mesFecha = (n, m) => sumarMeses(n.seguimiento.inicio, m - 1);
+export const nombreMes = (n, m) => mesFecha(n, m).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+export function limiteMes(n, m) { const d = sumarMeses(n.seguimiento.inicio, m); d.setDate(DIA_LIMITE); d.setHours(23, 59, 0, 0); return d; }
 
-export function valoresKpi(n, kid) {
-  return (n.valores && n.valores[kid]) || [null, null, null];
-}
-
-export function mesCompleto(n, m) {
-  const ks = n.seguimiento?.kpis || [];
-  return ks.length > 0 && ks.every(k => valorDef(valoresKpi(n, k.id)[m - 1]));
-}
-
-export const valorDef = v => v !== null && v !== undefined && v !== '' && !Number.isNaN(v);
-
-export function mesesRegistrados(n) {
-  let c = 0;
-  for (let m = 1; m <= MESES; m++) { if (mesCompleto(n, m)) c = m; else break; }
+// Meses cuyo plazo ya venció (día 5 del mes siguiente).
+export function mesesVencidos(n, hoy = new Date()) {
+  if (!n.seguimiento?.confirmado) return 0;
+  let c = 0; while (c < MAX_MESES && hoy > limiteMes(n, c + 1)) c++;
   return c;
 }
+// Meses que se muestran: los 3 del programa y, en continuidad, los que vayan pasando.
+export function mesesVisibles(n, hoy = new Date()) {
+  if (!n.seguimiento?.confirmado) return MESES_PROGRAMA;
+  const transcurridos = Math.floor((hoy - mesFecha(n, 1)) / DIA / 30.44) + 1;
+  return Math.max(MESES_PROGRAMA, Math.min(MAX_MESES, transcurridos));
+}
 
-// Mes que toca registrar ahora (el primero incompleto), o null si el programa terminó.
-export function mesPendiente(n) {
+export const valoresKpi = (n, kid) => (n.valores && n.valores[kid]) || [];
+export const mesCompleto = (n, m) => {
+  const ks = n.seguimiento?.kpis || [];
+  return ks.length > 0 && ks.every(k => valorDef(valoresKpi(n, k.id)[m - 1]));
+};
+
+// Mes que toca registrar: el primero incompleto que ya empezó.
+export function mesPendiente(n, hoy = new Date()) {
   if (!n.seguimiento?.confirmado) return null;
-  for (let m = 1; m <= MESES; m++) if (!mesCompleto(n, m)) return m;
+  for (let m = 1; m <= MAX_MESES; m++) {
+    if (mesFecha(n, m) > hoy) return null;
+    if (!mesCompleto(n, m)) return m;
+  }
   return null;
 }
 
-export function fase(n) {
-  const d = avanceDiagnostico(n);
-  if (!d.completo) return { id: 'diagnostico', nombre: 'Diagnóstico', pct: 10 + Math.round(20 * d.hechas / d.total) };
-  if (!n.prioridades?.confirmadas) return { id: 'prioridades', nombre: 'Prioridades', pct: 30 };
-  if (!n.seguimiento?.confirmado) return { id: 'indicadores', nombre: 'Indicadores', pct: 45 };
-  const reg = mesesRegistrados(n);
-  if (reg >= MESES) return { id: 'cierre', nombre: 'Programa completado', pct: 100 };
-  return { id: 'mes' + (reg + 1), nombre: `Seguimiento · mes ${reg + 1}`, pct: 55 + reg * 15 };
+// Línea base efectiva: el valor inicial o, si estaba vacío, la primera medición.
+export function baseEfectiva(n, s) {
+  if (valorDef(s.base)) return Number(s.base);
+  const v = valoresKpi(n, s.id).find(valorDef);
+  return valorDef(v) ? Number(v) : null;
 }
 
+const peor = (k, a, b) => k.dir === 'up' ? b < a : k.dir === 'down' ? b > a : Math.abs(b) > Math.abs(a);
+const mejor = (k, a, b) => k.dir === 'up' ? b > a : k.dir === 'down' ? b < a : Math.abs(b) < Math.abs(a);
+
 export function tendencia(k, serie) {
-  const vals = serie.filter(valorDef);
+  const vals = serie.filter(valorDef).map(Number);
   if (vals.length < 2) return null;
   const a = vals[vals.length - 2], b = vals[vals.length - 1];
-  if (a === b) return 'igual';
-  const mejora = k.dir === 'up' ? b > a : b < a;
-  return mejora ? 'mejora' : 'empeora';
+  return mejor(k, a, b) ? 'mejora' : peor(k, a, b) ? 'empeora' : 'igual';
 }
 
 export function cumplimiento(k, base, obj, actual) {
-  if (![base, obj, actual].every(valorDef) || base === obj) return null;
-  const pct = Math.round((actual - base) / (obj - base) * 100);
-  return Math.max(-100, Math.min(150, pct));
+  if (![base, obj, actual].every(valorDef)) return null;
+  const b = k.dir === 'zero' ? Math.abs(base) : base, o = k.dir === 'zero' ? Math.abs(obj) : obj, a = k.dir === 'zero' ? Math.abs(actual) : actual;
+  if (b === o) return null;
+  return Math.max(-100, Math.min(150, Math.round((a - b) / (o - b) * 100)));
 }
 
-export function alertas(n) {
+export function alertas(n, hoy = new Date()) {
   const out = [];
   const d = avanceDiagnostico(n);
-  if (!d.completo && d.hechas > 0) out.push({ tipo: 'aviso', texto: `Diagnóstico sin terminar (${d.hechas} de ${d.total})` });
-  if (!d.completo && d.hechas === 0) out.push({ tipo: 'info', texto: 'Diagnóstico sin empezar' });
-  if (d.completo && !n.prioridades?.confirmadas) out.push({ tipo: 'info', texto: 'Prioridades pendientes de confirmar' });
-  if (n.prioridades?.confirmadas && !n.seguimiento?.confirmado) out.push({ tipo: 'info', texto: 'Indicadores pendientes de definir' });
+  if (!d.completo) out.push({ tipo: d.hechas ? 'aviso' : 'info', texto: d.hechas ? `Diagnóstico sin terminar (${d.hechas} de ${d.total})` : 'Diagnóstico sin empezar', tab: 'diagnostico' });
+  else if (!n.prioridades?.confirmadas) out.push({ tipo: 'info', texto: 'Prioridades pendientes de confirmar', tab: 'resultados' });
+  else if (!n.seguimiento?.confirmado) out.push({ tipo: 'info', texto: 'Línea base: faltan los indicadores', tab: 'indicadores' });
   if (n.seguimiento?.confirmado) {
-    const venc = mesesVencidos(n);
-    for (let m = 1; m <= venc; m++) {
-      if (!mesCompleto(n, m)) out.push({ tipo: 'alerta', texto: `Falta el dato del mes ${m} (${nombreMes(n.seguimiento.inicio, m)})` });
-    }
+    const venc = mesesVencidos(n, hoy);
+    for (let m = 1; m <= venc; m++) if (!mesCompleto(n, m))
+      out.push({ tipo: 'alerta', texto: `Falta el dato de ${nombreMes(n, m)} (plazo: día ${DIA_LIMITE})`, tab: 'seguimiento' });
     n.seguimiento.kpis.forEach(s => {
       const k = kpi(s.id);
-      const serie = [s.base, ...valoresKpi(n, s.id)].filter(valorDef);
+      const serie = [s.base, ...valoresKpi(n, s.id)].filter(valorDef).map(Number);
       if (serie.length >= 3) {
         const [a, b, c] = serie.slice(-3);
-        const peor = (x, y) => k.dir === 'up' ? y < x : y > x;
-        if (peor(a, b) && peor(b, c)) { out.push({ tipo: 'alerta', texto: `${k.nombre} empeora dos meses seguidos` }); return; }
+        if (peor(k, a, b) && peor(k, b, c)) { out.push({ tipo: 'alerta', texto: `${k.nombre}: empeora dos meses seguidos`, tab: 'seguimiento' }); return; }
       }
-      if (tendencia(k, serie) === 'empeora') out.push({ tipo: 'aviso', texto: `${k.nombre} empeoró el último mes` });
+      if (tendencia(k, serie) === 'empeora') out.push({ tipo: 'aviso', texto: `${k.nombre}: empeoró el último mes`, tab: 'seguimiento' });
     });
   }
-  const { bloqueoDigital } = puntuaciones(n);
-  if (d.completo && bloqueoDigital) out.push({ tipo: 'info', texto: 'Línea digital bloqueada hasta que Caja clara llegue al 40 %' });
+  if (n.prioridades?.confirmadas && !n.diagnosticoFinal) {
+    accionesDe(n, n.prioridades.ids).forEach(a => {
+      const fechas = a.acciones.map(x => x.hecha).filter(Boolean).map(x => new Date(x));
+      const desde = fechas.length ? Math.max(...fechas) : new Date(n.prioridades.fecha).getTime();
+      const todas = a.acciones.every(x => x.hecha);
+      if (!todas && (hoy - desde) / DIA > DIAS_SIN_AVANCE)
+        out.push({ tipo: 'aviso', texto: `Prioridad sin avances en ${DIAS_SIN_AVANCE} días: ${a.nombre}`, tab: 'prioridades' });
+    });
+  }
+  const f = fase(n, hoy);
+  if (f.id === 'cierre') out.push({ tipo: 'info', texto: 'Semana 12: toca el diagnóstico final y el informe de cierre', tab: 'resultados' });
   return out;
 }
 
@@ -192,6 +235,6 @@ export const fmt = (v, unidad) => {
   if (unidad === '€') return num + ' €';
   if (unidad === '%') return num + ' %';
   if (unidad === '/5') return num + ' / 5';
-  if (unidad === 'min') return num + ' min';
+  if (['min', 'h', 'días'].includes(unidad)) return num + ' ' + unidad;
   return num;
 };

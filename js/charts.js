@@ -1,4 +1,4 @@
-// Gráficas en SVG, sin librerías externas, con la paleta de Made.
+// Gráficas en SVG, sin librerías externas.
 import { valorDef, fmt } from './engine.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -47,7 +47,7 @@ export function radar(pilares, size = 260) {
   </svg>`;
 }
 
-// Anillo de progreso para el Índice Made.
+// Anillo de progreso para el índice.
 export function anillo(pct, size = 148) {
   const r = size / 2 - 10, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, pct || 0));
   return `<svg class="ring-chart" viewBox="0 0 ${size} ${size}" aria-hidden="true">
