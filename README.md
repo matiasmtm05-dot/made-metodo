@@ -8,6 +8,10 @@ Prototipo funcional. **Solo datos ficticios.** El nombre definitivo está pendie
 2. **Funciona con datos y mide resultados.** Línea base, objetivo a 90 días, dato mensual, gráficas, alertas y comparación entre el diagnóstico inicial y el final.
 3. **Es escalable.** La consultora gestiona varios negocios desde un panel con fases, avance, alertas y la media de la cartera por pilar.
 
+## Estudio de campo
+
+La sección *Estudio de campo* muestra, de forma agregada y anónima, las entrevistas del estudio de mercado en Debagoiena (hoja «Registro» del Excel): dónde falla la zona, media por pilar, prioridades que saldrían con el motor, disposición a pagar y preocupaciones. Solo entran entrevistas con consentimiento y nunca nombres ni contactos. La consultora puede actualizarla subiendo un Excel nuevo con la misma plantilla (lector SheetJS, licencia Apache 2.0, alojado en `assets/vendor`).
+
 ## Reglas (Modelo de Diagnóstico v3)
 
 - Pilar = puntos ÷ (2 × preguntas aplicables). Índice = media de los 5 pilares.

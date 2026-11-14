@@ -2,6 +2,7 @@
 // La capa está aislada aquí para conectarla después a la base de datos en la UE (Supabase, Fráncfort).
 import { PREGUNTAS } from './data.js';
 import { prioridadesPropuestas, kpisSugeridos, ahora } from './engine.js';
+import { ESTUDIO_INICIAL } from './estudio.js';
 
 const KEY = 'plataforma.hosteleria.v3';
 const SESSION = 'plataforma.hosteleria.sesion';
@@ -130,6 +131,10 @@ export async function restablecer() { mem.data = await semilla(); guardar(); }
 export const datos = () => mem.data;
 export const config = () => mem.data.config;
 export function guardarConfig(c) { mem.data.config = { ...mem.data.config, ...c }; guardar(); }
+// Estudio de campo: por defecto el del Excel incluido; la consultora puede subir uno más nuevo.
+export const estudio = () => mem.data.estudio || { ...ESTUDIO_INICIAL, propio: false };
+export function guardarEstudio(entrevistas, archivo) { mem.data.estudio = { ...ESTUDIO_INICIAL, entrevistas, fuente: archivo, propio: true }; guardar(); }
+export function restaurarEstudio() { delete mem.data.estudio; guardar(); }
 export const negocio = id => mem.data.negocios.find(n => n.id === id);
 export function actualizar(id, fn) { const n = negocio(id); fn(n); n.actualizado = ahora().toISOString(); guardar(); return n; }
 

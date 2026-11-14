@@ -3,6 +3,7 @@ import * as S from './store.js';
 import * as E from './engine.js';
 import { PILARES, PREGUNTAS, KPIS, ESCALA, PROTOCOLOS, TIPOS, MUNICIPIOS, DIAS, CANALES, RANGOS_VENTAS, REDES_QUIEN, pilar, pregunta, kpi } from './data.js';
 import { lineaKpi, radar, anillo } from './charts.js';
+import { leerRegistro } from './estudio.js';
 
 const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,6 +46,7 @@ function layout(body, current = '') {
     nav = [['#/mi-negocio', 'Mi negocio', 'mi'], ['#/informe/' + negocioActivo(u).id, 'Informe', 'informe']];
   } else {
     nav = [['#/panel', 'Panel', 'panel']];
+    nav.push(['#/estudio', 'Estudio de campo', 'estudio']);
     nav.push(['#/metodo', 'Método', 'metodo']);
     if (u.rol === 'admin') nav.push(['#/ajustes', 'Ajustes', 'ajustes']);
   }
@@ -606,6 +608,101 @@ function informeView(n) {
   </div>`, 'informe');
 }
 
+
+// ---------------- Estudio de campo ----------------
+const pctTxt = (a, b) => b ? Math.round(a / b * 100) + ' %' : '—';
+function contar(lista) { const m = new Map(); lista.forEach(x => { const k = x ?? 'Sin respuesta'; m.set(k, (m.get(k) || 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]); }
+function analizarEstudio(ents) {
+  const fichas = ents.map(e => ({ e, p: E.puntuaciones({ respuestas: e.r }), prio: E.prioridadesPropuestas({ respuestas: e.r }) }));
+  const n = ents.length;
+  const conI = fichas.filter(f => f.p.indice != null);
+  const exactos = conI.map(f => f.p.pilares.filter(x => x.exacto != null).reduce((s, x) => s + x.exacto, 0) / f.p.pilares.filter(x => x.exacto != null).length);
+  const indiceMedio = exactos.length ? Math.round(exactos.reduce((a, b) => a + b, 0) / exactos.length) : null;
+  const pilares = PILARES.map((p, i) => { const v = fichas.map(f => f.p.pilares[i].exacto).filter(x => x != null); return { ...p, pct: v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null }; });
+  const preguntas = PREGUNTAS.map(q => {
+    const v = ents.map(e => e.r[q.id]).filter(x => x === 0 || x === 1 || x === 2);
+    return { q, aplic: v.length, c0: v.filter(x => x === 0).length, c1: v.filter(x => x === 1).length, c2: v.filter(x => x === 2).length };
+  });
+  const prioFrec = contar(fichas.flatMap(f => f.prio)).map(([id, c]) => ({ q: pregunta(id), c }));
+  const niveles = contar(conI.map(f => f.p.nivel.nombre));
+  const importes = ents.map(e => Number(e.importe)).filter(x => Number.isFinite(x) && x > 0);
+  const patrones = contar(ents.map(e => PREGUNTAS.map(q => e.r[q.id]).join(''))).filter(([, c]) => c > 1);
+  return { n, fichas, indiceMedio, pilares, preguntas, prioFrec, niveles, importes, patrones,
+    pagaria: contar(ents.map(e => e.pagaria)), interes: contar(ents.map(e => e.interes)), carta: contar(ents.map(e => e.carta)),
+    preocupaciones: contar(ents.map(e => e.preocupacion)), municipios: contar(ents.map(e => e.m)), tipos: contar(ents.map(e => e.tipo)),
+    personas: ents.map(e => Number(e.personas)).filter(Number.isFinite),
+    herr: ['caja', 'cervecera', 'costes', 'consultor', 'agencia'].map(k => ({ k, si: ents.filter(e => e.herr?.[k] === 'Sí').length })) };
+}
+function estudioView() {
+  const est = S.estudio(), A = analizarEstudio(est.entrevistas), n = A.n;
+  const nivelId = t => ({ 'Crítico': 'critico', 'En desarrollo': 'desarrollo', 'Sólido': 'solido' }[t] || '');
+  const fallos = [...A.preguntas].sort((x, y) => y.c0 / (y.aplic || 1) - x.c0 / (x.aplic || 1));
+  const cuenta = (lista, k) => (lista.find(([t]) => t === k) || [, 0])[1];
+  const siPaga = cuenta(A.pagaria, 'Sí'), depende = cuenta(A.pagaria, 'Depende'), siInteres = cuenta(A.interes, 'Sí');
+  const imp = A.importes, impMedia = imp.length ? Math.round(imp.reduce((a, b) => a + b, 0) / imp.length) : null;
+  const impIguales = imp.length > 2 && new Set(imp).size === 1;
+  const HERR = { caja: 'Programa de caja con informes', cervecera: 'App de una cervecera', costes: 'Programa de costes o inventario', consultor: 'Consultor de hostelería', agencia: 'Agencia de redes' };
+  const medPers = A.personas.length ? (A.personas.reduce((a, b) => a + b, 0) / A.personas.length).toLocaleString('es-ES', { maximumFractionDigits: 1 }) : '—';
+  const avisos = [];
+  if (impIguales) avisos.push(`Las ${imp.length} entrevistas tienen el mismo «importe razonable» (${imp[0].toLocaleString('es-ES')} €), también las que dicen que no pagarían. Parece un valor arrastrado al rellenar el Excel.`);
+  if (A.patrones.length) avisos.push(`Hay respuestas idénticas en las 24 preguntas: ${A.patrones.map(([, c]) => c + ' negocios').join(', ')} con exactamente el mismo patrón. Conviene revisarlo antes de enseñarlo.`);
+  if (cuenta(A.carta, 'Sin respuesta') === n && siInteres) avisos.push(`La columna «¿Firmaría carta de interés?» está vacía en las ${n} entrevistas, aunque ${siInteres} dijeron que les interesa el servicio.`);
+  if (A.herr.every(h => h.si === 0)) avisos.push('Ninguna entrevista marca herramientas ni asesores (todas «No»): revisa si es así o si falta rellenar esas columnas.');
+  return layout(`
+    <div class="head"><div><span class="label">Estudio de mercado · ${esc(est.zona)}</span><h1 style="margin-top:6px">Estudio de campo</h1>
+      <p class="muted">${n} entrevistas anónimas a negocios de hostelería con las mismas 24 preguntas del método. Son datos reales y agregados de un estudio de mercado: no son clientes de la plataforma.</p></div>
+      ${yo().rol === 'admin' ? `<div class="btns"><label class="btn sec" data-mut>${ico.plus} Actualizar con un Excel<input type="file" accept=".xlsx" data-act="importar-estudio" hidden></label>${est.propio ? '<button class="btn ghost sm" data-act="estudio-original" data-mut>Volver al Excel original</button>' : ''}</div>` : ''}</div>
+    ${yo().rol === 'admin' && avisos.length ? `<section class="card" style="border-color:#e7b5a4;background:#fdf5f2;margin-bottom:20px"><h3 style="margin-bottom:10px">Antes de enseñarlo: revisa el Excel</h3>
+      <p class="small muted" style="margin-bottom:10px">Este aviso solo lo ve la consultora. La cuenta de solo lectura no lo ve.</p>
+      <ul class="action-list">${avisos.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>` : ''}
+    <div class="stats">
+      <div class="stat"><span class="label">Entrevistas válidas</span><b>${n}</b></div>
+      <div class="stat"><span class="label">${esc(cfg().indice)} medio</span><b>${A.indiceMedio ?? '—'}<small style="font-size:22px"> %</small></b></div>
+      <div class="stat"><span class="label">En nivel crítico</span><b>${cuenta(A.niveles, 'Crítico')}<small style="font-size:22px"> de ${n}</small></b></div>
+      <div class="stat"><span class="label">Pagarían por el servicio</span><b>${siPaga}<small style="font-size:22px"> de ${n}</small></b></div>
+    </div>
+    <div class="cols-2-1">
+      <div class="stack">
+        <section class="card"><h3 style="margin-bottom:6px">Dónde falla la zona</h3>
+          <p class="muted small" style="margin-bottom:16px">Porcentaje de negocios donde la práctica no existe (respuesta 0), de más a menos.</p>
+          <div class="bars">${fallos.map(x => `<div class="bar-row"><header><span><b>${x.q.id}</b> ${esc(x.q.texto)}</span><b>${pctTxt(x.c0, x.aplic)}</b></header><div class="progress"><i style="width:${x.aplic ? x.c0 / x.aplic * 100 : 0}%;${x.c0 / (x.aplic || 1) >= .75 ? 'background:#a4432f' : ''}"></i></div><span class="small muted">${x.c0} de ${x.aplic} sin la práctica · ${x.c1} a veces · ${x.c2} con evidencia</span></div>`).join('')}</div>
+        </section>
+        <section class="card"><h3 style="margin-bottom:6px">Qué prioridades saldrían</h3>
+          <p class="muted small" style="margin-bottom:16px">El mismo motor de priorización aplicado a cada entrevista. Prioridades que más se repiten entre los ${n} negocios.</p>
+          <table class="table"><thead><tr><th>Prioridad</th><th>Pilar</th><th>Negocios</th></tr></thead><tbody>
+          ${A.prioFrec.slice(0, 8).map(x => `<tr><td><b>${x.q.id}</b> ${esc(x.q.problema)}</td><td class="small">${esc(pilar(x.q.p).corto)}</td><td><b>${x.c}</b> <span class="muted small">de ${n}</span></td></tr>`).join('')}
+          </tbody></table>
+        </section>
+      </div>
+      <aside class="stack">
+        <section class="card"><h3 style="margin-bottom:16px">Media por pilar</h3>
+          <div class="bars">${A.pilares.map(p => `<div class="bar-row"><header><span>${p.id} ${esc(p.nombre)}</span><b>${p.pct ?? '—'}${p.pct != null ? ' %' : ''}</b></header><div class="progress"><i style="width:${p.pct || 0}%"></i></div></div>`).join('')}</div>
+          <p class="small muted" style="margin-top:14px">Niveles: ${A.niveles.map(([t, c]) => `<span class="tag ${nivelId(t)}">${esc(t)} ${c}</span>`).join(' ')}</p>
+        </section>
+        <section class="card crema"><h3 style="margin-bottom:12px">Disposición a pagar</h3>
+          <ul class="alerts">
+            <li class="info"><span class="dot"></span><span><b>¿Pagaría?</b> ${A.pagaria.map(([t, c]) => `${esc(t)} ${c}`).join(' · ')}</span></li>
+            <li class="info"><span class="dot"></span><span><b>¿Le interesa el servicio?</b> ${A.interes.map(([t, c]) => `${esc(t)} ${c}`).join(' · ')}</span></li>
+            <li class="info"><span class="dot"></span><span><b>Carta de interés</b> ${A.carta.map(([t, c]) => `${esc(t)} ${c}`).join(' · ')}</span></li>
+            ${impMedia != null ? `<li class="${impIguales ? 'aviso' : 'info'}"><span class="dot"></span><span><b>Importe razonable por 3 meses</b> ${impIguales ? `${impMedia.toLocaleString('es-ES')} € en todas las respuestas` : `media ${impMedia.toLocaleString('es-ES')} € (de ${Math.min(...imp).toLocaleString('es-ES')} a ${Math.max(...imp).toLocaleString('es-ES')} €)`}</span></li>` : ''}
+          </ul>
+        </section>
+        <section class="card"><h3 style="margin-bottom:12px">Lo que más les preocupa</h3>
+          <p class="small muted" style="margin-bottom:12px">Con sus palabras.</p>
+          <ul class="action-list">${A.preocupaciones.map(([t, c]) => `<li>«${esc(t)}» <span class="muted small">· ${c}</span></li>`).join('')}</ul>
+        </section>
+        <section class="card"><h3 style="margin-bottom:12px">Quién respondió</h3>
+          <p class="small">${A.tipos.map(([t, c]) => `${esc(t)}: ${c}`).join(' · ')}</p>
+          <p class="small" style="margin-top:6px">${A.municipios.map(([t, c]) => `${esc(t)} ${c}`).join(' · ')}</p>
+          <p class="small muted" style="margin-top:6px">Media de ${medPers} personas trabajando por negocio.</p>
+          <h4 style="margin:14px 0 6px">Herramientas que usan hoy</h4>
+          <p class="small">${A.herr.map(h => `${HERR[h.k]}: <b>${h.si}</b>`).join(' · ')}</p>
+        </section>
+        <p class="small muted">Fuente: ${esc(est.fuente)}. Solo se cargan entrevistas con consentimiento; los nombres y contactos no entran en la plataforma.</p>
+      </aside>
+    </div>`, 'estudio');
+}
+
 // ---------------- Método (referencia) ----------------
 function metodoView() {
   return layout(`
@@ -664,6 +761,7 @@ function render() {
     else if (r === 'informe' && n) { html = informeView(n); title = 'Informe ' + n.nombre; }
     else if (r === 'vista-dueno' && n) { html = duenoView(n, true); title = 'Vista del dueño'; }
     else if (r === 'metodo') { html = metodoView(); title = 'Método'; }
+    else if (r === 'estudio') { html = estudioView(); title = 'Estudio de campo'; }
     else if (r === 'ajustes' && u.rol === 'admin') { html = ajustesView(); title = 'Ajustes'; }
     else { if (r !== 'panel') history.replaceState(null, '', '#/panel'); html = panelView(); title = 'Panel'; }
   } else {
@@ -679,7 +777,7 @@ function render() {
 }
 
 // ---------------- Acciones ----------------
-const MUTA = new Set(['reset', 'eliminar', 'resp', 'confirmar-prio', 'desconfirmar', 'restaurar-prio', 'confirmar-kpi', 'cumplida', 'diag-final', 'quitar-acceso']);
+const MUTA = new Set(['reset', 'eliminar', 'resp', 'confirmar-prio', 'desconfirmar', 'restaurar-prio', 'confirmar-kpi', 'cumplida', 'diag-final', 'quitar-acceso', 'estudio-original']);
 document.addEventListener('click', async ev => {
   const el = ev.target.closest('[data-act]');
   if (!el || el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
@@ -748,6 +846,7 @@ document.addEventListener('click', async ev => {
       S.actualizar(id, n => { const d = E.ahora(); d.setDate(1); d.setHours(12, 0, 0, 0); n.seguimiento.confirmado = true; n.seguimiento.fecha = E.ahora().toISOString(); n.seguimiento.inicio = n.seguimiento.inicio || d.toISOString(); n.valores = n.valores || {}; });
       toast('Seguimiento mensual en marcha'); go(`#/negocio/${id}/seguimiento`); break;
     case 'imprimir': window.print(); break;
+    case 'estudio-original': S.restaurarEstudio(); toast('Datos del Excel original'); render(); break;
   }
 });
 
@@ -774,6 +873,12 @@ document.addEventListener('change', ev => {
   } else if (act === 'mes-val') {
     S.actualizar(id, n => { n.valores = n.valores || {}; const arr = [...E.valoresKpi(n, el.dataset.k)]; arr[Number(el.dataset.m) - 1] = parseNum(el.value); n.valores[el.dataset.k] = arr; });
     keep(); toast('Dato guardado');
+  } else if (act === 'importar-estudio' && el.files?.[0]) {
+    const file = el.files[0];
+    cargarXLSX().then(XLSX => file.arrayBuffer().then(buf => {
+      const ents = leerRegistro(XLSX, buf);
+      S.guardarEstudio(ents, file.name); toast(`Estudio actualizado: ${ents.length} entrevistas`); render();
+    })).catch(e => toast('No pude leer el Excel: ' + e.message));
   } else if (act === 'accion') {
     S.actualizar(id, n => { n.acciones = n.acciones || {}; if (el.checked) n.acciones[el.dataset.k] = E.ahora().toISOString(); else delete n.acciones[el.dataset.k]; });
     keep();
@@ -836,6 +941,11 @@ document.addEventListener('submit', async ev => {
     toast('¡Gracias! Datos del mes guardados'); render(); window.scrollTo(0, 0);
   }
 });
+
+function cargarXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise((ok, ko) => { const s = document.createElement('script'); s.src = 'assets/vendor/xlsx.mini.min.js'; s.onload = () => ok(window.XLSX); s.onerror = () => ko(new Error('no se cargó el lector de Excel')); document.head.appendChild(s); });
+}
 
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 (async () => { await S.cargar(); render(); })();
